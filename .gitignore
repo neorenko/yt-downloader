@@ -1,0 +1,7 @@
+# Ігноруємо конфіденційні дані
+config.ini
+*.pyc
+__pycache__/
+build/
+dist/
+*.spec 

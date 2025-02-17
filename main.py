@@ -5,8 +5,7 @@ from PyQt6.QtWidgets import QApplication, QWidget, QLabel, QPushButton, QComboBo
 from PyQt6.QtGui import QPixmap, QIcon
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from time import sleep
-import requests
-from packaging import version
+import configparser
 
 class DownloadThread(QThread):
     progress_update = pyqtSignal(int)
@@ -135,12 +134,10 @@ class PreviewThread(QThread):
 class YouTubeDownloader(QWidget):
     def __init__(self):
         super().__init__()
+        self.version = "1.0.1"  # Оновлюємо версію
+        self.load_config()
         self.setWindowTitle("YouTube Downloader")
         self.resize(1024, 768)
-        self.version = "1.0.0"
-        self.github_repo = "ваш_username/ваш_репозиторій"
-        self.github_token = "ваш_персональний_токен"  # Створіть токен в налаштуваннях GitHub
-        self.check_for_updates()
 
         main_layout = QVBoxLayout()
         main_layout.setSpacing(10)
@@ -206,6 +203,17 @@ class YouTubeDownloader(QWidget):
 
         self.save_path = ""
 
+    def load_config(self):
+        config = configparser.ConfigParser()
+        try:
+            config.read('config.ini')
+            self.github_token = config['GitHub']['token']
+            self.github_repo = config['GitHub']['repo']
+        except Exception as e:
+            print(f"Помилка завантаження конфігурації: {e}")
+            self.github_token = ""
+            self.github_repo = ""
+
     def select_folder(self):
         self.save_path = QFileDialog.getExistingDirectory(self, "Виберіть папку для збереження")
         if self.save_path:
@@ -262,48 +270,6 @@ class YouTubeDownloader(QWidget):
         self.video_title.setText("Назва: ")
         self.video_format.setText("Формат: ")
         self.video_url.setText("URL: ")
-
-    def check_for_updates(self):
-        try:
-            headers = {
-                'Authorization': f'token {self.github_token}',
-                'Accept': 'application/vnd.github.v3+json'
-            }
-            # Отримуємо останній реліз
-            response = requests.get(
-                f'https://api.github.com/repos/{self.github_repo}/releases/latest',
-                headers=headers
-            )
-            
-            if response.status_code == 200:
-                release_data = response.json()
-                latest_version = release_data['tag_name'].replace('v', '')
-                
-                if version.parse(latest_version) > version.parse(self.version):
-                    download_url = None
-                    # Шукаємо .exe файл серед assets
-                    for asset in release_data['assets']:
-                        if asset['name'].endswith('.exe'):
-                            download_url = asset['browser_download_url']
-                            break
-                    
-                    if download_url:
-                        self.show_update_dialog(latest_version, download_url)
-                    
-        except Exception as e:
-            print(f"Помилка перевірки оновлень: {e}")
-
-    def show_update_dialog(self, new_version, download_url):
-        msg = QMessageBox()
-        msg.setIcon(QMessageBox.Information)
-        msg.setText(f"Доступна нова версія {new_version}")
-        msg.setInformativeText("Бажаєте оновити програму?")
-        msg.setWindowTitle("Доступне оновлення")
-        msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-        
-        if msg.exec() == QMessageBox.Yes:
-            import webbrowser
-            webbrowser.open(download_url)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

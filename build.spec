@@ -6,7 +6,7 @@ a = Analysis(
     ['main.py'],
     pathex=[],
     binaries=[],
-    datas=[('assets/folder.png', 'assets/')],  # Оновлений шлях до іконки кнопки
+    datas=[('assets/folder.png', 'assets/')],  # Залишаємо тільки для кнопки
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
@@ -39,5 +39,4 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon='assets/app.ico'  # Окрема іконка для додатку (створіть файл .ico)
 ) 
