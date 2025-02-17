@@ -2,3 +2,4 @@ yt-dlp
 PyQt6
 requests
 packaging 
+pyinstaller

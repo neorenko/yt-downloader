@@ -146,7 +146,7 @@ class PreviewThread(QThread):
 class YouTubeDownloader(QWidget):
     def __init__(self):
         super().__init__()
-        self.version = "1.0.2"
+        self.version = "1.0.3"
         self.load_config()
         self.check_for_updates()
         self.setWindowTitle("YouTube Downloader")

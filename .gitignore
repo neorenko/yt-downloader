@@ -1,8 +1,10 @@
-# Ігноруємо конфіденційні дані
-config.ini
-.gitignore
-*.pyc
 __pycache__/
 build/
 dist/
-*.spec 
+*.pyc
+*.pyo
+*.spec
+.idea/
+.vscode/
+.env
+config.ini
