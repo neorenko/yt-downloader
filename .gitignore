@@ -1,10 +1,25 @@
+# Ignore ffmpeg
+assets/ffmpeg.exe
+
+# Python
 __pycache__/
-build/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
 dist/
-*.pyc
-*.pyo
+build/
 *.spec
-.idea/
+
+# Virtual Environment
+venv/
+env/
+
+# IDE
 .vscode/
-.env
+.idea/
+
+# Temp files
+*.tmp
+
 config.ini
