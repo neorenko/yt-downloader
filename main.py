@@ -6,6 +6,9 @@ from PyQt6.QtGui import QPixmap, QIcon
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from time import sleep
 import configparser
+import requests
+from packaging import version
+import json
 
 class DownloadThread(QThread):
     progress_update = pyqtSignal(int)
@@ -18,9 +21,14 @@ class DownloadThread(QThread):
         self.selected_format = selected_format
         self.last_progress = 0
         self.progress_history = []
+        self.is_cancelled = False
+
+    def cancel(self):
+        self.is_cancelled = True
 
     def run(self):
         try:
+            self.is_cancelled = False
             self.last_progress = 0
             self.progress_history = []
             self.progress_update.emit(0) 
@@ -28,6 +36,7 @@ class DownloadThread(QThread):
             ydl_opts = {
                 'outtmpl': os.path.join(self.save_path, '%(title)s.%(ext)s'),
                 'progress_hooks': [self.progress_hook],
+                'quiet': True,
             }
 
             if self.selected_format == "MP4 (1080p)":
@@ -56,6 +65,8 @@ class DownloadThread(QThread):
             self.download_finished.emit(f"Помилка: {error_message}")
 
     def progress_hook(self, d):
+        if self.is_cancelled:
+            raise Exception("Завантаження скасовано")
         if d['status'] == 'downloading':
             try:
                 total_bytes = d.get('total_bytes') or d.get('total_bytes_estimate', 0)
@@ -100,13 +111,24 @@ class DownloadThread(QThread):
 
 class PreviewThread(QThread):
     preview_ready = pyqtSignal(QPixmap, str)
-
+    
     def __init__(self, url):
         super().__init__()
         self.url = url
+        self.cache_dir = os.path.join(os.path.expanduser('~'), '.ytdownloader_cache')
+        if not os.path.exists(self.cache_dir):
+            os.makedirs(self.cache_dir)
 
     def run(self):
         try:
+            # Перевірка кешу
+            cache_file = os.path.join(self.cache_dir, f"{hash(self.url)}.jpg")
+            if os.path.exists(cache_file):
+                pixmap = QPixmap(cache_file)
+                if not pixmap.isNull():
+                    self.preview_ready.emit(pixmap, "")
+                    return
+
             ydl_opts = {'quiet': True}
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info_dict = ydl.extract_info(self.url, download=False)
@@ -115,6 +137,8 @@ class PreviewThread(QThread):
                     data = ydl.urlopen(thumbnail_url).read()
                     pixmap = QPixmap()
                     pixmap.loadFromData(data)
+                    # Зберігаємо в кеш
+                    pixmap.save(cache_file, "JPEG")
                     self.preview_ready.emit(pixmap, info_dict.get('title', ''))
         except Exception as e:
             print(f"Помилка при отриманні прев'ю: {e}")
@@ -122,8 +146,9 @@ class PreviewThread(QThread):
 class YouTubeDownloader(QWidget):
     def __init__(self):
         super().__init__()
-        self.version = "1.0.2"  
+        self.version = "1.0.2"
         self.load_config()
+        self.check_for_updates()
         self.setWindowTitle("YouTube Downloader")
         self.resize(1024, 768)
 
@@ -190,6 +215,7 @@ class YouTubeDownloader(QWidget):
         self.setLayout(main_layout)
 
         self.save_path = ""
+        self.max_history_items = 100  # Максимальна кількість записів в історії
 
     def load_config(self):
         config = configparser.ConfigParser()
@@ -210,12 +236,19 @@ class YouTubeDownloader(QWidget):
     def show_preview(self):
         url = self.url_input.text().strip()
         if url:
-            if hasattr(self, 'preview_thread') and self.preview_thread.isRunning():
-                self.preview_thread.quit()
-            
-            self.preview_thread = PreviewThread(url)
-            self.preview_thread.preview_ready.connect(self.update_preview)
-            self.preview_thread.start()
+            try:
+                # Перевірка валідності URL
+                if not url.startswith(('http://', 'https://', 'www.youtube.com', 'youtu.be')):
+                    raise ValueError("Невалідний YouTube URL")
+                
+                if hasattr(self, 'preview_thread') and self.preview_thread.isRunning():
+                    self.preview_thread.quit()
+                
+                self.preview_thread = PreviewThread(url)
+                self.preview_thread.preview_ready.connect(self.update_preview)
+                self.preview_thread.start()
+            except Exception as e:
+                QMessageBox.warning(self, "Помилка", f"Невалідний URL: {str(e)}")
 
     def update_preview(self, pixmap, title):
         self.preview_label.setPixmap(pixmap)
@@ -247,6 +280,12 @@ class YouTubeDownloader(QWidget):
 
     def on_download_complete(self, message):
         self.history_text.append(message)
+        
+        # Обмеження розміру історії
+        history = self.history_text.toPlainText().split('\n')
+        if len(history) > self.max_history_items:
+            self.history_text.setPlainText('\n'.join(history[-self.max_history_items:]))
+        
         self.download_btn.setEnabled(True)
         self.progress_bar.setValue(0)
         
@@ -256,6 +295,63 @@ class YouTubeDownloader(QWidget):
         self.video_title.setText("Назва: ")
         self.video_format.setText("Формат: ")
         self.video_url.setText("URL: ")
+
+    def check_for_updates(self):
+        try:
+            headers = {'Authorization': f'token {self.github_token}'} if self.github_token else {}
+            response = requests.get(
+                f'https://api.github.com/repos/{self.github_repo}/releases/latest',
+                headers=headers
+            )
+            
+            if response.status_code == 200:
+                release_info = response.json()
+                latest_version = release_info['tag_name'].replace('v', '')
+                
+                if version.parse(latest_version) > version.parse(self.version):
+                    reply = QMessageBox.question(
+                        self,
+                        "Доступне оновлення",
+                        f"Доступна нова версія {latest_version}. Бажаєте завантажити?",
+                        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                    )
+                    
+                    if reply == QMessageBox.StandardButton.Yes:
+                        for asset in release_info['assets']:
+                            if asset['name'].endswith('.exe'):
+                                self.download_update(asset['browser_download_url'])
+                                break
+        except Exception as e:
+            print(f"Помилка перевірки оновлень: {e}")
+
+    def download_update(self, download_url):
+        try:
+            progress_dialog = QMessageBox(self)
+            progress_dialog.setWindowTitle("Завантаження оновлення")
+            progress_dialog.setText("Завантаження оновлення...")
+            progress_dialog.setStandardButtons(QMessageBox.StandardButton.Cancel)
+            progress_dialog.show()
+
+            response = requests.get(download_url, stream=True)
+            total_size = int(response.headers.get('content-length', 0))
+            
+            update_file = "update.exe"
+            block_size = 1024
+            
+            with open(update_file, 'wb') as f:
+                for data in response.iter_content(block_size):
+                    f.write(data)
+                    
+            progress_dialog.close()
+            
+            QMessageBox.information(
+                self,
+                "Оновлення завантажено",
+                "Оновлення успішно завантажено. Будь ласка, закрийте програму та запустіть файл update.exe"
+            )
+            
+        except Exception as e:
+            QMessageBox.warning(self, "Помилка", f"Помилка завантаження оновлення: {e}")
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
