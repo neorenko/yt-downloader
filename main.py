@@ -2,8 +2,8 @@ import os
 import sys
 import yt_dlp
 from PyQt6.QtWidgets import QApplication, QWidget, QLabel, QPushButton, QComboBox, QFileDialog, QLineEdit, QVBoxLayout, QHBoxLayout, QGridLayout, QTextEdit, QProgressBar, QMessageBox
-from PyQt6.QtGui import QPixmap, QIcon
-from PyQt6.QtCore import Qt, QThread, pyqtSignal
+from PyQt6.QtGui import QPixmap, QIcon, QImage
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer
 from time import sleep
 import configparser
 import requests
@@ -126,7 +126,8 @@ class DownloadThread(QThread):
 
 class PreviewThread(QThread):
     preview_ready = pyqtSignal(QPixmap, str)
-    
+    error = pyqtSignal(str)
+
     def __init__(self, url):
         super().__init__()
         self.url = url
@@ -144,19 +145,38 @@ class PreviewThread(QThread):
                     self.preview_ready.emit(pixmap, "")
                     return
 
-            ydl_opts = {'quiet': True}
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info_dict = ydl.extract_info(self.url, download=False)
-                thumbnail_url = info_dict.get('thumbnail')
-                if thumbnail_url:
-                    data = ydl.urlopen(thumbnail_url).read()
-                    pixmap = QPixmap()
-                    pixmap.loadFromData(data)
-                    # Зберігаємо в кеш
-                    pixmap.save(cache_file, "JPEG")
-                    self.preview_ready.emit(pixmap, info_dict.get('title', ''))
+            with yt_dlp.YoutubeDL({'quiet': True}) as ydl:
+                info = ydl.extract_info(self.url, download=False)
+                
+                if not info:
+                    self.error.emit("Не вдалося отримати інформацію про відео")
+                    return
+                    
+                thumbnail_url = info.get('thumbnail')
+                if not thumbnail_url:
+                    self.error.emit("Не знайдено превью для відео")
+                    return
+                    
+                response = requests.get(thumbnail_url)
+                if response.status_code != 200:
+                    self.error.emit("Помилка завантаження превью")
+                    return
+                    
+                image = QImage()
+                image.loadFromData(response.content)
+                
+                if image.isNull():
+                    self.error.emit("Помилка обробки зображення")
+                    return
+                    
+                pixmap = QPixmap.fromImage(image)
+                title = info.get('title', 'Без назви')
+                
+                # Зберігаємо в кеш
+                pixmap.save(cache_file, "JPEG")
+                self.preview_ready.emit(pixmap, title)
         except Exception as e:
-            print(f"Помилка при отриманні прев'ю: {e}")
+            self.error.emit(str(e))
 
 class YouTubeDownloader(QWidget):
     def __init__(self):
@@ -200,12 +220,13 @@ class YouTubeDownloader(QWidget):
             self.url_input = QLineEdit(self)
             self.url_input.setPlaceholderText("Вставте URL відео...")
             self.url_input.setFixedWidth(700)
-            self.url_input.textChanged.connect(self.show_preview)
+            self.url_input.textChanged.connect(self.on_url_changed)
             self.top_layout.addWidget(self.url_input)
 
             # Format Combo
             self.format_combo = QComboBox(self)
             self.format_combo.addItems(["MP4 (1080p)", "MP4 (4k)", "MP3", "M4A"])
+            self.format_combo.currentTextChanged.connect(self.on_format_changed)
             self.top_layout.addWidget(self.format_combo)
 
             # Folder Button
@@ -378,24 +399,80 @@ class YouTubeDownloader(QWidget):
         except Exception as e:
             print(f"Помилка очистки інтерфейсу: {str(e)}")
 
+    def on_url_changed(self):
+        """Обробка зміни URL"""
+        try:
+            if not hasattr(self, '_url_timer'):
+                self._url_timer = QTimer()
+                self._url_timer.setSingleShot(True)
+                self._url_timer.timeout.connect(self.show_preview)
+            
+            self._url_timer.stop()
+            self._url_timer.start(500)  # Затримка 500мс перед оновленням превью
+            
+        except Exception as e:
+            print(f"Помилка при зміні URL: {str(e)}")
+
+    def on_format_changed(self, new_format):
+        """Обробка зміни формату"""
+        try:
+            if hasattr(self, 'video_format'):
+                self.video_format.setText(f"Формат: {new_format}")
+        except Exception as e:
+            print(f"Помилка при зміні формату: {str(e)}")
+
     def show_preview(self):
         """Показ превью відео"""
         try:
             url = self.url_input.text().strip()
             if url and not self.downloading:
+                if not url.startswith(('http://', 'https://')):
+                    self.add_to_history("Помилка: Невірний формат URL")
+                    return
+                
                 self.preview_thread = PreviewThread(url)
                 self.preview_thread.preview_ready.connect(self.update_preview)
+                self.preview_thread.error.connect(self.handle_preview_error)
                 self.preview_thread.start()
+            
         except Exception as e:
-            print(f"Помилка показу превью: {str(e)}")
+            self.add_to_history(f"Помилка превью: {str(e)}")
+
+    def handle_preview_error(self, error_message):
+        """Обробка помилок превью"""
+        self.add_to_history(f"Помилка завантаження превью: {error_message}")
+        self.clear_preview()
+
+    def clear_preview(self):
+        """Очистка превью"""
+        try:
+            self.preview_label.clear()
+            self.video_title.setText("Назва: ")
+            self.video_format.setText(f"Формат: {self.format_combo.currentText()}")
+            self.video_url.setText("URL: ")
+        except Exception as e:
+            print(f"Помилка очистки превью: {str(e)}")
 
     def update_preview(self, pixmap, title):
         """Оновлення превью"""
         try:
-            self.preview_label.setPixmap(pixmap.scaled(400, 220, Qt.AspectRatioMode.KeepAspectRatio))
+            scaled_pixmap = pixmap.scaled(
+                400, 220,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation
+            )
+            
+            self.preview_label.setPixmap(scaled_pixmap)
+            
+            # Форматуємо текст
+            title = title if len(title) <= 50 else title[:47] + "..."
+            url = self.url_input.text().strip()
+            url = url if len(url) <= 50 else url[:47] + "..."
+            
             self.video_title.setText(f"Назва: {title}")
             self.video_format.setText(f"Формат: {self.format_combo.currentText()}")
-            self.video_url.setText(f"URL: {self.url_input.text().strip()}")
+            self.video_url.setText(f"URL: {url}")
+            
         except Exception as e:
             print(f"Помилка оновлення превью: {str(e)}")
 
