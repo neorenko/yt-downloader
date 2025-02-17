@@ -227,7 +227,7 @@ class PreviewThread(QThread):
 class YouTubeDownloader(QWidget):
     def __init__(self):
         super().__init__()
-        self.version = "1.1.0"
+        self.version = "1.0.4"
         self.init_ui()
         self.load_config()
         self.check_for_updates()
