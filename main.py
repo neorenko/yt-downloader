@@ -156,7 +156,7 @@ class PreviewThread(QThread):
 class YouTubeDownloader(QWidget):
     def __init__(self):
         super().__init__()
-        self.version = "1.0.3"
+        self.version = "1.0.4"
         self.load_config()
         self.check_for_updates()
         self.setWindowTitle("YouTube Downloader")
@@ -270,41 +270,52 @@ class YouTubeDownloader(QWidget):
         url = self.url_input.text().strip()
         self.video_url.setText(f"URL: {url}")
 
+    def setup_download_options(self):
+        ydl_opts = {
+            'ffmpeg_location': resource_path('ffmpeg.exe'),
+            'outtmpl': '%(title)s.%(ext)s'
+        }
+
+        if self.selected_format == "MP4 (1080p)":
+            ydl_opts['format'] = 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best'
+            ydl_opts['merge_output_format'] = 'mp4'
+        
+        elif self.selected_format == "MP4 (4k)":
+            ydl_opts['format'] = 'bestvideo[height<=2160][ext=mp4]+bestaudio[ext=m4a]/best[height<=2160][ext=mp4]/best'
+            ydl_opts['merge_output_format'] = 'mp4'
+        
+        elif self.selected_format == "MP3":
+            ydl_opts['format'] = 'bestaudio/best'
+            ydl_opts['postprocessors'] = [{
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'mp3',
+                'preferredquality': '192',
+            }]
+        
+        elif self.selected_format == "M4A":
+            ydl_opts['format'] = 'bestaudio/best'
+            ydl_opts['postprocessors'] = [{
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'm4a',
+                'preferredquality': '192',
+            }]
+        
+        else:  # За замовчуванням найкраща якість MP4
+            ydl_opts['format'] = 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best'
+            ydl_opts['merge_output_format'] = 'mp4'
+
+        return ydl_opts
+
     def download_video(self):
-        url = self.url_input.text().strip()
-        selected_format = self.format_combo.currentText()
-
-        if not url:
-            QMessageBox.warning(self, "Помилка", "Будь ласка, введіть URL відео.")
-            return
-
-        if not self.save_path:
-            QMessageBox.warning(self, "Помилка", "Будь ласка, виберіть папку для збереження.")
-            return
-
-        self.download_thread = DownloadThread(url, self.save_path, selected_format)
-        self.download_thread.progress_update.connect(self.progress_bar.setValue)
-        self.download_thread.download_finished.connect(self.on_download_complete)
-        self.download_thread.start()
-        self.download_btn.setEnabled(False)
-
-    def on_download_complete(self, message):
-        self.history_text.append(message)
-        
-        # Обмеження розміру історії
-        history = self.history_text.toPlainText().split('\n')
-        if len(history) > self.max_history_items:
-            self.history_text.setPlainText('\n'.join(history[-self.max_history_items:]))
-        
-        self.download_btn.setEnabled(True)
-        self.progress_bar.setValue(0)
-        
-        self.url_input.clear()
-        
-        self.preview_label.clear()
-        self.video_title.setText("Назва: ")
-        self.video_format.setText("Формат: ")
-        self.video_url.setText("URL: ")
+        try:
+            url = self.url_input.text()
+            ydl_opts = self.setup_download_options()
+            
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([url])
+                
+        except Exception as e:
+            QMessageBox.warning(self, "Помилка", str(e))
 
     def check_for_updates(self):
         try:
