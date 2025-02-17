@@ -10,6 +10,16 @@ import requests
 from packaging import version
 import json
 
+def resource_path(relative_path):
+    """ Отримати абсолютний шлях до ресурсу """
+    try:
+        # PyInstaller створює тимчасову папку і зберігає шлях в _MEIPASS
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)
+
 class DownloadThread(QThread):
     progress_update = pyqtSignal(int)
     download_finished = pyqtSignal(str)
@@ -172,7 +182,7 @@ class YouTubeDownloader(QWidget):
         top_layout.addWidget(self.format_combo)
 
         self.select_folder_btn = QPushButton("Вибрати папку", self)
-        self.select_folder_btn.setIcon(QIcon('./assets/folder.png'))
+        self.select_folder_btn.setIcon(QIcon(resource_path('assets/folder.png')))
         self.select_folder_btn.clicked.connect(self.select_folder)
         top_layout.addWidget(self.select_folder_btn)
 
