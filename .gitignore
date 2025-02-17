@@ -1,5 +1,6 @@
 # Ігноруємо конфіденційні дані
 config.ini
+.gitignore
 *.pyc
 __pycache__/
 build/

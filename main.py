@@ -21,17 +21,15 @@ class DownloadThread(QThread):
 
     def run(self):
         try:
-            # Скидання прогресу перед початком
             self.last_progress = 0
             self.progress_history = []
-            self.progress_update.emit(0)  # Явне встановлення 0% на початку
+            self.progress_update.emit(0) 
             
             ydl_opts = {
                 'outtmpl': os.path.join(self.save_path, '%(title)s.%(ext)s'),
                 'progress_hooks': [self.progress_hook],
             }
 
-            # Налаштування формату відео
             if self.selected_format == "MP4 (1080p)":
                 ydl_opts['format'] = 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best'
             elif self.selected_format == "MP4 (4k)":
@@ -48,14 +46,12 @@ class DownloadThread(QThread):
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([self.url])
             
-            # Переконуємося, що прогрес досяг 100%
             if self.last_progress < 100:
                 self.progress_update.emit(100)
             
             self.download_finished.emit(f"Завантажено: {self.url} у форматі {self.selected_format}")
         except Exception as e:
             error_message = str(e)
-            # Скидання прогресу при помилці
             self.progress_update.emit(0)
             self.download_finished.emit(f"Помилка: {error_message}")
 
@@ -65,34 +61,28 @@ class DownloadThread(QThread):
                 total_bytes = d.get('total_bytes') or d.get('total_bytes_estimate', 0)
                 downloaded_bytes = d.get('downloaded_bytes', 0)
                 
-                # Перевірка валідності значень
                 if not isinstance(total_bytes, (int, float)) or not isinstance(downloaded_bytes, (int, float)):
                     return
                 
                 if total_bytes <= 0:
                     return
                 
-                # Захист від некоректних значень
                 if downloaded_bytes > total_bytes:
                     downloaded_bytes = total_bytes
                 
                 progress = int((downloaded_bytes / total_bytes) * 100)
                 
-                # Обмеження прогресу в межах 0-99%
                 progress = max(0, min(99, progress))
                 
-                # Якщо це перші оновлення прогресу
                 if len(self.progress_history) < 3:
                     if progress > self.last_progress:
                         self.last_progress = progress
                         self.progress_update.emit(progress)
                 else:
-                    # Згладжування прогресу
                     self.progress_history.append(progress)
                     if len(self.progress_history) > 10:
                         self.progress_history.pop(0)
                     
-                    # Захист від викидів у значеннях прогресу
                     sorted_progress = sorted(self.progress_history)
                     filtered_progress = sorted_progress[1:-1] if len(sorted_progress) > 4 else sorted_progress
                     avg_progress = sum(filtered_progress) / len(filtered_progress)
@@ -102,11 +92,9 @@ class DownloadThread(QThread):
                         self.progress_update.emit(int(avg_progress))
                     
             except Exception as e:
-                # Не дозволяємо помилці зупинити процес завантаження
                 print(f"Помилка оновлення прогресу: {str(e)}")
             
         elif d['status'] == 'finished':
-            # Переконуємося, що прогрес-бар досягає 100% при завершенні
             if self.last_progress < 100:
                 self.progress_update.emit(100)
 
@@ -134,7 +122,7 @@ class PreviewThread(QThread):
 class YouTubeDownloader(QWidget):
     def __init__(self):
         super().__init__()
-        self.version = "1.0.1"  # Оновлюємо версію
+        self.version = "1.0.2"  
         self.load_config()
         self.setWindowTitle("YouTube Downloader")
         self.resize(1024, 768)
@@ -262,10 +250,8 @@ class YouTubeDownloader(QWidget):
         self.download_btn.setEnabled(True)
         self.progress_bar.setValue(0)
         
-        # Очищення поля введення URL
         self.url_input.clear()
         
-        # Очищення прев'ю
         self.preview_label.clear()
         self.video_title.setText("Назва: ")
         self.video_format.setText("Формат: ")
