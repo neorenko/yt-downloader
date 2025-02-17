@@ -56,23 +56,27 @@ class DownloadThread(QThread):
 
             if self.selected_format == "MP4 (1080p)":
                 ydl_opts.update({
-                    'format': 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best',
+                    'format': 'bestvideo[height<=1080][vcodec!*=av1][vcodec!*=vp9][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][vcodec!*=av1][vcodec!*=vp9][ext=mp4]/best',
                     'postprocessors': [{
                         'key': 'FFmpegVideoConvertor',
                         'preferedformat': 'mp4'
                     }],
                     'merge_output_format': 'mp4',
-                    'audio_quality': 0  
+                    'audio_quality': 0,
+                    'prefer_ffmpeg': True,
+                    'format_sort': ['res:1080', 'vcodec:h264', 'acodec:m4a']
                 })
             elif self.selected_format == "MP4 (4k)":
                 ydl_opts.update({
-                    'format': 'bestvideo[height<=2160][ext=mp4]+bestaudio[ext=m4a]/best[height<=2160][ext=mp4]/best',
+                    'format': 'bestvideo[height<=2160][vcodec!*=av1][vcodec!*=vp9][ext=mp4]+bestaudio[ext=m4a]/best[height<=2160][vcodec!*=av1][vcodec!*=vp9][ext=mp4]/best',
                     'postprocessors': [{
                         'key': 'FFmpegVideoConvertor',
                         'preferedformat': 'mp4'
                     }],
                     'merge_output_format': 'mp4',
-                    'audio_quality': 0  
+                    'audio_quality': 0,
+                    'prefer_ffmpeg': True,
+                    'format_sort': ['res:2160', 'vcodec:h264', 'acodec:m4a']
                 })
             elif self.selected_format == "MP3":
                 ydl_opts.update({
@@ -80,9 +84,10 @@ class DownloadThread(QThread):
                     'postprocessors': [{
                         'key': 'FFmpegExtractAudio',
                         'preferredcodec': 'mp3',
-                        'preferredquality': '320'  
+                        'preferredquality': '320'
                     }],
-                    'audio_quality': 0
+                    'audio_quality': 0,
+                    'prefer_ffmpeg': True
                 })
             elif self.selected_format == "M4A":
                 ydl_opts.update({
@@ -90,19 +95,22 @@ class DownloadThread(QThread):
                     'postprocessors': [{
                         'key': 'FFmpegExtractAudio',
                         'preferredcodec': 'm4a',
-                        'preferredquality': '0'  
+                        'preferredquality': '0'
                     }],
-                    'audio_quality': 0
+                    'audio_quality': 0,
+                    'prefer_ffmpeg': True
                 })
             else:
                 ydl_opts.update({
-                    'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+                    'format': 'bestvideo[vcodec!*=av1][vcodec!*=vp9][ext=mp4]+bestaudio[ext=m4a]/best[vcodec!*=av1][vcodec!*=vp9][ext=mp4]/best',
                     'postprocessors': [{
                         'key': 'FFmpegVideoConvertor',
                         'preferedformat': 'mp4'
                     }],
                     'merge_output_format': 'mp4',
-                    'audio_quality': 0
+                    'audio_quality': 0,
+                    'prefer_ffmpeg': True,
+                    'format_sort': ['vcodec:h264', 'acodec:m4a']
                 })
 
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -544,24 +552,28 @@ class YouTubeDownloader(QWidget):
 
         if self.selected_format == "MP4 (1080p)":
             ydl_opts.update({
-                'format': 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best',
+                'format': 'bestvideo[height<=1080][vcodec!*=av1][vcodec!*=vp9][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][vcodec!*=av1][vcodec!*=vp9][ext=mp4]/best',
                 'postprocessors': [{
                     'key': 'FFmpegVideoConvertor',
                     'preferedformat': 'mp4'
                 }],
                 'merge_output_format': 'mp4',
-                'audio_quality': 0  # Найвища якість аудіо
+                'audio_quality': 0,
+                'prefer_ffmpeg': True,
+                'format_sort': ['res:1080', 'vcodec:h264', 'acodec:m4a']
             })
         
         elif self.selected_format == "MP4 (4k)":
             ydl_opts.update({
-                'format': 'bestvideo[height<=2160][ext=mp4]+bestaudio[ext=m4a]/best[height<=2160][ext=mp4]/best',
+                'format': 'bestvideo[height<=2160][vcodec!*=av1][vcodec!*=vp9][ext=mp4]+bestaudio[ext=m4a]/best[height<=2160][vcodec!*=av1][vcodec!*=vp9][ext=mp4]/best',
                 'postprocessors': [{
                     'key': 'FFmpegVideoConvertor',
                     'preferedformat': 'mp4'
                 }],
                 'merge_output_format': 'mp4',
-                'audio_quality': 0  # Найвища якість аудіо
+                'audio_quality': 0,
+                'prefer_ffmpeg': True,
+                'format_sort': ['res:2160', 'vcodec:h264', 'acodec:m4a']
             })
         
         elif self.selected_format == "MP3":
@@ -570,9 +582,10 @@ class YouTubeDownloader(QWidget):
                 'postprocessors': [{
                     'key': 'FFmpegExtractAudio',
                     'preferredcodec': 'mp3',
-                    'preferredquality': '320'  # Найвища якість MP3
+                    'preferredquality': '320'
                 }],
-                'audio_quality': 0
+                'audio_quality': 0,
+                'prefer_ffmpeg': True
             })
         
         elif self.selected_format == "M4A":
@@ -581,9 +594,10 @@ class YouTubeDownloader(QWidget):
                 'postprocessors': [{
                     'key': 'FFmpegExtractAudio',
                     'preferredcodec': 'm4a',
-                    'preferredquality': '0'  # Найвища якість M4A
+                    'preferredquality': '0'
                 }],
-                'audio_quality': 0
+                'audio_quality': 0,
+                'prefer_ffmpeg': True
             })
         
         return ydl_opts
