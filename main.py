@@ -271,9 +271,12 @@ class YouTubeDownloader(QWidget):
         self.video_url.setText(f"URL: {url}")
 
     def setup_download_options(self):
+        # Отримуємо вибраний формат з комбобоксу
+        self.selected_format = self.format_combo.currentText()
+        
         ydl_opts = {
             'ffmpeg_location': resource_path('ffmpeg.exe'),
-            'outtmpl': '%(title)s.%(ext)s'
+            'outtmpl': os.path.join(self.save_path, '%(title)s.%(ext)s')  # Додаємо шлях збереження
         }
 
         if self.selected_format == "MP4 (1080p)":
@@ -309,11 +312,20 @@ class YouTubeDownloader(QWidget):
     def download_video(self):
         try:
             url = self.url_input.text()
+            
+            if not self.save_path:
+                QMessageBox.warning(self, "Помилка", "Виберіть папку для збереження!")
+                return
+            
+            if not url:
+                QMessageBox.warning(self, "Помилка", "Введіть URL відео!")
+                return
+            
             ydl_opts = self.setup_download_options()
             
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([url])
-                
+            
         except Exception as e:
             QMessageBox.warning(self, "Помилка", str(e))
 
