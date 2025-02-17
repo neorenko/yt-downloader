@@ -18,7 +18,11 @@ def resource_path(relative_path):
     except Exception:
         base_path = os.path.abspath(".")
 
-    return os.path.join(base_path, relative_path)
+    path = os.path.join(base_path, relative_path)
+    # Перевіряємо чи існує файл
+    if not os.path.exists(path):
+        print(f"Файл не знайдено: {path}")
+    return path
 
 class DownloadThread(QThread):
     progress_update = pyqtSignal(int)
@@ -271,42 +275,57 @@ class YouTubeDownloader(QWidget):
         self.video_url.setText(f"URL: {url}")
 
     def setup_download_options(self):
-        # Отримуємо вибраний формат з комбобоксу
         self.selected_format = self.format_combo.currentText()
         
+        ffmpeg_path = resource_path('ffmpeg.exe')
+        print(f"FFmpeg path: {ffmpeg_path}")  # Для відладки
+        
         ydl_opts = {
-            'ffmpeg_location': resource_path('ffmpeg.exe'),
-            'outtmpl': os.path.join(self.save_path, '%(title)s.%(ext)s')  # Додаємо шлях збереження
+            'ffmpeg_location': ffmpeg_path,
+            'outtmpl': os.path.join(self.save_path, '%(title)s.%(ext)s'),
+            'verbose': True  # Додаємо для відладки
         }
 
         if self.selected_format == "MP4 (1080p)":
-            ydl_opts['format'] = 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best'
-            ydl_opts['merge_output_format'] = 'mp4'
+            ydl_opts.update({
+                'format': 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best',
+                'merge_output_format': 'mp4',
+                'postprocessors': [{
+                    'key': 'FFmpegVideoConvertor',
+                    'preferedformat': 'mp4'
+                }]
+            })
         
         elif self.selected_format == "MP4 (4k)":
-            ydl_opts['format'] = 'bestvideo[height<=2160][ext=mp4]+bestaudio[ext=m4a]/best[height<=2160][ext=mp4]/best'
-            ydl_opts['merge_output_format'] = 'mp4'
+            ydl_opts.update({
+                'format': 'bestvideo[height<=2160][ext=mp4]+bestaudio[ext=m4a]/best[height<=2160][ext=mp4]/best',
+                'merge_output_format': 'mp4',
+                'postprocessors': [{
+                    'key': 'FFmpegVideoConvertor',
+                    'preferedformat': 'mp4'
+                }]
+            })
         
         elif self.selected_format == "MP3":
-            ydl_opts['format'] = 'bestaudio/best'
-            ydl_opts['postprocessors'] = [{
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'mp3',
-                'preferredquality': '192',
-            }]
+            ydl_opts.update({
+                'format': 'bestaudio/best',
+                'postprocessors': [{
+                    'key': 'FFmpegExtractAudio',
+                    'preferredcodec': 'mp3',
+                    'preferredquality': '192',
+                }]
+            })
         
         elif self.selected_format == "M4A":
-            ydl_opts['format'] = 'bestaudio/best'
-            ydl_opts['postprocessors'] = [{
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'm4a',
-                'preferredquality': '192',
-            }]
+            ydl_opts.update({
+                'format': 'bestaudio/best',
+                'postprocessors': [{
+                    'key': 'FFmpegExtractAudio',
+                    'preferredcodec': 'm4a',
+                    'preferredquality': '192',
+                }]
+            })
         
-        else:  # За замовчуванням найкраща якість MP4
-            ydl_opts['format'] = 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best'
-            ydl_opts['merge_output_format'] = 'mp4'
-
         return ydl_opts
 
     def download_video(self):
@@ -323,11 +342,17 @@ class YouTubeDownloader(QWidget):
             
             ydl_opts = self.setup_download_options()
             
+            # Перевіряємо наявність ffmpeg
+            ffmpeg_path = ydl_opts['ffmpeg_location']
+            if not os.path.exists(ffmpeg_path):
+                QMessageBox.warning(self, "Помилка", f"FFmpeg не знайдено за шляхом: {ffmpeg_path}")
+                return
+            
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([url])
             
         except Exception as e:
-            QMessageBox.warning(self, "Помилка", str(e))
+            QMessageBox.warning(self, "Помилка", f"Помилка завантаження: {str(e)}")
 
     def check_for_updates(self):
         try:
